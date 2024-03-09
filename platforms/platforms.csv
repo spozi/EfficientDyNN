@@ -1,4 +1,5 @@
-ID,Platform,TVMOption
-1,TuTJetsonCPU, "llvm -device=arm_cpu -march=armv8.2-a -mtriple=aarch64-linux-gnu"
-2,TuTSkylakeCPU, "llvm -mcpu=skylake-avx512"
-3,TuTRTXA400, "cuda arch=sm_86"
+Platform,TVMParameters
+TuTJetsonCPU,llvm -device=arm_cpu -march=armv8.2-a -mtriple=aarch64-linux-gnu
+TuTSkylakeCPU,llvm -mcpu=skylake-avx512
+TuTRTXA400,cuda arch=sm_86
+TutJetsonGPU,cuda arch=sm_72

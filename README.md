@@ -16,4 +16,11 @@ Compatible with popular deep learning frameworks such as \st{TensorFlow} and PyT
     - MobileNetV3
     - ResNet50
 2. Build shared library for each model through cross compilation
+    - Cross compilation is much easier if we build through docker, that is (I think):
+        a. Boot a linux based non x86-64 platform
+        b. Deploy a docker container
+            - Install miniforge
+            - Install tvm
+        c. Install necessary library
+        d. Save it as image and deploy it on x86-64 server
 3. Profile of each pretrained model
