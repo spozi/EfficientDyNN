@@ -85,7 +85,7 @@ class Model:
         # ctx = tvm.device(self.platform_device)
         # ctx = tvm.device(str(self.platform_parameters), 0)
         # ctx = tvm.device(str(self.platform_parameters))
-        ################################
+        ##########################################################################
         
         self.module = graph_runtime.GraphModule(self.compiled_model["default"](ctx))
         
