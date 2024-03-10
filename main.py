@@ -1,6 +1,6 @@
 from model import Model
 
-model = Model(model="squeezenet1.1-7", platform="TuTJetsonCPU")
+model = Model(model_name="squeezenet1.1-7", platform="TuTJetsonCPU")
 # model.compile()
 
 # from Resource import ResourceManager

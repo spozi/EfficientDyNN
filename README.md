@@ -24,3 +24,6 @@ Compatible with popular deep learning frameworks such as \st{TensorFlow} and PyT
         c. Install necessary library
         d. Save it as image and deploy it on x86-64 server
 3. Profile of each pretrained model
+
+# Requirements
+1. TVM is build and installed in your environment.
