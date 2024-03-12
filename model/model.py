@@ -4,16 +4,16 @@ import onnx
 import numpy as np
 
 # TVM
-# import tvm
-# from tvm import relay
-# from tvm import te
-# from tvm import rpc
-# from tvm.contrib import utils
-# from tvm.relay import testing
-# from tvm.contrib import graph_executor
+import tvm
+from tvm import relay
+from tvm import te
+from tvm import rpc
+from tvm.contrib import utils
+from tvm.relay import testing
+from tvm.contrib import graph_executor
 
 # Load Pillow for loading example input
-# from PIL import Image
+from PIL import Image
 
 # Import pandas where all the configuration is saved in platforms.csv and pretrained_models.csv
 import pandas as pd
@@ -109,6 +109,6 @@ class Model:
         
         # Get output
         output = self.module.get_output(0).asnumpy()
-        preds = np.squeeze(out_deploy)
+        preds = np.squeeze(output)
         probs = softmax(preds)
         return preds, probs
