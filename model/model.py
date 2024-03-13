@@ -10,10 +10,10 @@ from tvm import te
 from tvm import rpc
 from tvm.contrib import utils
 from tvm.relay import testing
-from tvm.contrib import graph_executor
+from tvm.contrib import graph_executor, graph_runtime
 
 # Load Pillow for loading example input
-from PIL import Image
+# from PIL import Image
 
 # Import pandas where all the configuration is saved in platforms.csv and pretrained_models.csv
 import pandas as pd
@@ -30,13 +30,7 @@ class Model:
         self.model_name = model_name
         
         self.platform = platform
-        # self.example_np_input = example_np_input
         self.compiled_model = compiled_model
-        # self.input_shape = None
-        # self.output_shape = None
-        
-        # self.output = model.graph.output
-        # self.input_all = model.graph.input
         
         # Load database file of stored pretrained models and platforms
         df_pretrained_models = pd.read_csv("pretrained_models/pretrained_models.csv") # Reading stored models
@@ -58,19 +52,19 @@ class Model:
         self.input_shape = shape_dict[self.pretrained_model_input_name] 
         
         # Create TVM context
-        # self.ctx = tvm.device(str(self.platform_parameters)) # Create context  
+        self.ctx = tvm.device(str(self.platform_parameters)) # Create context  
         # print(self.input_shape)
         
     def compile(self, compile_to_path):
-        # Your implementation for the compile method
         # Preparing IR
-        shape_dict = {inputname_models[model_name]: self.example_np_input.shape}
+        shape_dict = {self.pretrained_model_input_name : self.example_np_input.shape}
         mod, params = relay.frontend.from_onnx(self.model_path, shape_dict)
         
         # Compiling
+        target = tvm.target.Target(str(self.platform_parameters))
         opt_level = 3
         with tvm.transform.PassContext(opt_level=opt_level):
-            lib = relay.build(mod, target_str, params=params)
+            lib = relay.build(mod, target, params=params)
             
         if ".tar" in compile_to_path:
             lib.export_library(compile_to_path)
@@ -86,8 +80,7 @@ class Model:
         # ctx = tvm.device(str(self.platform_parameters), 0)
         # ctx = tvm.device(str(self.platform_parameters))
         ##########################################################################
-        
-        self.module = graph_runtime.GraphModule(self.compiled_model["default"](ctx))
+        self.module = graph_runtime.GraphModule(self.compiled_model["default"](self.ctx))
         
     def predict(self, input):
         if self.module is None:
