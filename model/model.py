@@ -2,21 +2,27 @@
 # We are going to use onnx based model
 import onnx
 import numpy as np
+import timeit
 
 # TVM
 import tvm
-from tvm import relay
+from tvm import relay, autotvm
 from tvm import te
 from tvm import rpc
 from tvm.contrib import utils
 from tvm.relay import testing
 from tvm.contrib import graph_executor, graph_runtime
+import tvm.auto_scheduler as auto_scheduler
+from tvm.autotvm.tuner import XGBTuner
 
 # Load Pillow for loading example input
 # from PIL import Image
 
 # Import pandas where all the configuration is saved in platforms.csv and pretrained_models.csv
 import pandas as pd
+
+# Import softmax from scipy
+from scipy.special import softmax, log_softmax
 
 # Assumptions
 # 1. Every ONNX based models must be stored in database
@@ -28,7 +34,6 @@ import pandas as pd
 class Model:
     def __init__(self, model_name, platform, compiled_model=None):
         self.model_name = model_name
-        
         self.platform = platform
         self.compiled_model = compiled_model
         
@@ -55,22 +60,129 @@ class Model:
         self.ctx = tvm.device(str(self.platform_parameters)) # Create context  
         # print(self.input_shape)
         
-    def compile(self, compile_to_path):
+    def compile(self, compile_to_path, performance_tuning=False):
         # Preparing IR
-        shape_dict = {self.pretrained_model_input_name : self.example_np_input.shape}
-        mod, params = relay.frontend.from_onnx(self.model_path, shape_dict)
+        shape_dict = {self.pretrained_model_input_name : self.input_shape}
+        mod, params = relay.frontend.from_onnx(self.onnx_model, shape_dict)
         
         # Compiling
         target = tvm.target.Target(str(self.platform_parameters))
         opt_level = 3
         with tvm.transform.PassContext(opt_level=opt_level):
             lib = relay.build(mod, target, params=params)
+        
+        if performance_tuning is True:
+            # # Load the module
+            # module = graph_executor.GraphModule(lib["default"](self.ctx))
+
+            # # Create a dummy data
+            # dummy_np_input = np.random.rand(self.input_shape)
+            # dummy_input = tvm.nd.array(dummy_np_input.astype('float32'), self.ctx)
             
+            # #Input the data
+            # module.set_input(self.pretrained_model_input_name, dummy_input)
+
+            # # Run prelimanary experiment to establish baseline
+            # timing_repeat = 10
+            # timing_number = 10
+            # unoptimized = (
+            #     np.array(timeit.Timer(lambda: module.run()).repeat(repeat=timing_repeat, number=timing_number))
+            #     * 1000
+            #     / timing_number
+            # )
+            # unoptimized = {
+            #     "mean": np.mean(unoptimized),
+            #     "median": np.median(unoptimized),
+            #     "std": np.std(unoptimized),
+            # }
+            
+            # Start tuning
+            # Create TVM Runner
+            number = 10
+            repeat = 1
+            min_repeat_ms = 0  # since we're tuning on a CPU, can be set to 0
+            timeout = 10  # in seconds
+            runner = autotvm.LocalRunner(
+                number=number,   #Number means number of variations that will be tested
+                repeat=repeat,
+                timeout=timeout,
+                min_repeat_ms=min_repeat_ms,
+                enable_cpu_cache_flush=True,
+            )
+            
+            tuning_option = {
+                "tuner": "xgb",
+                "trials": 20,
+                "early_stopping": 100,
+                "measure_option": autotvm.measure_option(
+                    builder=autotvm.LocalBuilder(build_func="default"), runner=runner
+                ),
+                "tuning_records": f"{compile_to_path}-autotuning.json",
+            }
+
+            # begin by extracting the tasks from the onnx model
+            tasks = autotvm.task.extract_from_program(mod["main"], target=target, params=params)
+
+            for i, task in enumerate(tasks):
+                prefix = "[Task %2d/%2d] " % (i + 1, len(tasks))
+
+                # choose tuner
+                tuner = "xgb"
+
+                # create tuner
+                if tuner == "xgb":
+                    tuner_obj = XGBTuner(task, loss_type="reg")
+                elif tuner == "xgb_knob":
+                    tuner_obj = XGBTuner(task, loss_type="reg", feature_type="knob")
+                elif tuner == "xgb_itervar":
+                    tuner_obj = XGBTuner(task, loss_type="reg", feature_type="itervar")
+                elif tuner == "xgb_curve":
+                    tuner_obj = XGBTuner(task, loss_type="reg", feature_type="curve")
+                elif tuner == "xgb_rank":
+                    tuner_obj = XGBTuner(task, loss_type="rank")
+                elif tuner == "xgb_rank_knob":
+                    tuner_obj = XGBTuner(task, loss_type="rank", feature_type="knob")
+                elif tuner == "xgb_rank_itervar":
+                    tuner_obj = XGBTuner(task, loss_type="rank", feature_type="itervar")
+                elif tuner == "xgb_rank_curve":
+                    tuner_obj = XGBTuner(task, loss_type="rank", feature_type="curve")
+                elif tuner == "xgb_rank_binary":
+                    tuner_obj = XGBTuner(task, loss_type="rank-binary")
+                elif tuner == "xgb_rank_binary_knob":
+                    tuner_obj = XGBTuner(task, loss_type="rank-binary", feature_type="knob")
+                elif tuner == "xgb_rank_binary_itervar":
+                    tuner_obj = XGBTuner(task, loss_type="rank-binary", feature_type="itervar")
+                elif tuner == "xgb_rank_binary_curve":
+                    tuner_obj = XGBTuner(task, loss_type="rank-binary", feature_type="curve")
+                # elif tuner == "ga":
+                #     tuner_obj = GATuner(task, pop_size=50)
+                # elif tuner == "random":
+                #     tuner_obj = RandomTuner(task)
+                # elif tuner == "gridsearch":
+                #     tuner_obj = GridSearchTuner(task)
+                else:
+                    raise ValueError("Invalid tuner: " + tuner)
+                
+                tuner_obj.tune(
+                    n_trial=min(tuning_option["trials"], len(task.config_space)),
+                    early_stopping=tuning_option["early_stopping"],
+                    measure_option=tuning_option["measure_option"],
+                    callbacks=[
+                        autotvm.callback.progress_bar(tuning_option["trials"], prefix=prefix),
+                        autotvm.callback.log_to_file(tuning_option["tuning_records"]),
+                    ],
+                )
+                with autotvm.apply_history_best(tuning_option["tuning_records"]):
+                    with tvm.transform.PassContext(opt_level=3, config={}):
+                        lib = relay.build(mod, target=target, params=params)
+
+                # dev = tvm.device(str(target), 0)
+                # module = graph_executor.GraphModule(lib["default"](dev))
         if ".tar" in compile_to_path:
             lib.export_library(compile_to_path)
         else:
             lib.export_library(f"{compile_to_path}.tar")
-
+            
     def load(self):
         if self.executable is None:
             raise RuntimeError("Model has not been compiled yet.")
@@ -80,7 +192,7 @@ class Model:
         # ctx = tvm.device(str(self.platform_parameters), 0)
         # ctx = tvm.device(str(self.platform_parameters))
         ##########################################################################
-        self.module = graph_runtime.GraphModule(self.compiled_model["default"](self.ctx))
+        self.module = graph_executor.GraphModule(self.compiled_model["default"](self.ctx)) 
         
     def predict(self, input):
         if self.module is None:

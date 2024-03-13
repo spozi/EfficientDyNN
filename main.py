@@ -1,6 +1,7 @@
 from model import Model
 
 model = Model(model_name="squeezenet1.1-7", platform="TuTJetsonCPU")
+model.compile("squeezenet1.1-7.tar", performance_tuning=True)
 # model.compile()
 
 # from Resource import ResourceManager
