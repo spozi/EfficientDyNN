@@ -68,39 +68,13 @@ class Model:
         # Compiling
         target = tvm.target.Target(str(self.platform_parameters))
         opt_level = 3
-        with tvm.transform.PassContext(opt_level=opt_level):
-            lib = relay.build(mod, target, params=params)
-        
-        if performance_tuning is True:
-            # # Load the module
-            # module = graph_executor.GraphModule(lib["default"](self.ctx))
-
-            # # Create a dummy data
-            # dummy_np_input = np.random.rand(self.input_shape)
-            # dummy_input = tvm.nd.array(dummy_np_input.astype('float32'), self.ctx)
-            
-            # #Input the data
-            # module.set_input(self.pretrained_model_input_name, dummy_input)
-
-            # # Run prelimanary experiment to establish baseline
-            # timing_repeat = 10
-            # timing_number = 10
-            # unoptimized = (
-            #     np.array(timeit.Timer(lambda: module.run()).repeat(repeat=timing_repeat, number=timing_number))
-            #     * 1000
-            #     / timing_number
-            # )
-            # unoptimized = {
-            #     "mean": np.mean(unoptimized),
-            #     "median": np.median(unoptimized),
-            #     "std": np.std(unoptimized),
-            # }
-            
+        lib = 0  # Declare
+        if performance_tuning is True:           
             # Start tuning
             # Create TVM Runner
             number = 10
             repeat = 1
-            min_repeat_ms = 0  # since we're tuning on a CPU, can be set to 0
+            min_repeat_ms = 0  # since we're tuning on a CPU, this can be set to 0
             timeout = 10  # in seconds
             runner = autotvm.LocalRunner(
                 number=number,   #Number means number of variations that will be tested
@@ -178,6 +152,9 @@ class Model:
 
                 # dev = tvm.device(str(target), 0)
                 # module = graph_executor.GraphModule(lib["default"](dev))
+        else:
+            with tvm.transform.PassContext(opt_level=opt_level):
+                lib = relay.build(mod, target, params=params)
         if ".tar" in compile_to_path:
             lib.export_library(compile_to_path)
         else:
