@@ -27,8 +27,10 @@ class TraditionalDistillation(DistillationStrategy):
         pass
     
     def train(self, **kwargs):
-        best_model_state = {}
-        train_history = []
+        self.best_model_state = {}
+        self.best_optimizer_state = {}
+        self.best_accuracy = 0
+        self.train_history = []
         """
         Train the student model based on initialized teacher_model and student_model.
 
@@ -129,17 +131,30 @@ class TraditionalDistillation(DistillationStrategy):
             print(f"Validation Accuracy: {100*val_accuracy:.2f}%")
             
             # Store the learning performance history
-            train_history.append((train_accuracy, val_accuracy))
+            self.train_history.append((running_loss, train_accuracy, val_accuracy))
             
             # Save model if validation accuracy improves
-            if val_accuracy > best_accuracy:
-                best_epoch = epoch
-                best_accuracy = val_accuracy
-                best_model_state = copy.deepcopy(self.student_model.state_dict())
+            if val_accuracy > self.best_accuracy:
+                self.best_epoch = epoch
+                self.best_accuracy = val_accuracy
+                self.best_model_state = copy.deepcopy(self.student_model.state_dict())
+                self.best_optimizer_state = copy.deepcopy(optimizer.state_dict())
                 # best_model_state = self.student_model.state_dict()
                 # torch.save(best_model_state, f'{model_saved_name}.pth')
-            print(f"Best accuracy ({best_epoch+1}): {best_accuracy}")
-        print(f"Best validation accuracy:{best_accuracy} with train accuracy:{train_accuracy}")
+            print(f"Best accuracy ({self.best_epoch+1}): {self.best_accuracy}")
+        print(f"Best validation accuracy:{self.best_accuracy} with train accuracy:{train_accuracy}")
+    
+    def save(self, path):
+        """
+            Save checkpoint of the best model.
+        """
+        torch.save({
+            'epoch': self.best_epoch,
+            'model_state_dict': self.best_model_state.state_dict(),
+            'optimizer_state_dict': self.best_optimizer_state.state_dict(),
+            'train_history': self.train_history
+        }, path)
+        
             
 class AttentionTransfer(DistillationStrategy):
     def distill(self, teacher_model, student_model):
